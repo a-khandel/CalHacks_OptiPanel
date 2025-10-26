@@ -52,6 +52,10 @@ class AnalyticsTracker {
   private readonly BACKEND_URL = 'http://localhost:3001/api/metrics/track';
   private pendingSend: boolean = false;
 
+  // Live tracking - continuous heartbeat
+  private readonly HEARTBEAT_INTERVAL_MS = 5000; // Send metrics every 5 seconds
+  private heartbeatInterval: number | null = null;
+
   constructor() {
     // Generate a persistent session ID for this user
     this.metrics.userId = this.getOrCreateUserId();
@@ -60,11 +64,11 @@ class AnalyticsTracker {
     this.metrics.company = 'Demo Customer';
 
     this.initializeTracking();
+    this.startLiveTracking();
 
     console.log('🚀 Analytics Tracker Initialized');
     console.log('📊 User ID:', this.metrics.userId);
-    console.log('⏳ Waiting for user interactions... (NO AUTO-TRACKING)');
-    // DO NOT send initial metrics - wait for actual user action
+    console.log('📡 LIVE TRACKING ENABLED - Sending metrics every 5 seconds');
   }
 
   // Get or create a persistent user ID for this session
@@ -105,15 +109,19 @@ class AnalyticsTracker {
       }
     });
 
-    // Track visibility changes (send final state when leaving)
+    // Track visibility changes (pause/resume live tracking)
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         this.updateFeatureTime();
+        // Pause live tracking when tab is hidden
+        this.stopLiveTracking();
         // Send final metrics when user leaves tab
         this.sendMetricsNow();
       } else {
         this.lastActivityTime = Date.now();
         this.featureStartTime = Date.now();
+        // Resume live tracking when tab becomes visible
+        this.startLiveTracking();
       }
     });
 
@@ -319,8 +327,32 @@ Active: ${metrics.isActive ? '✅ Yes' : '❌ No'}
     }
   }
 
+  // Start live tracking with continuous heartbeat
+  private startLiveTracking() {
+    // Send initial metrics
+    this.sendMetrics();
+
+    // Set up continuous heartbeat to send metrics every 5 seconds
+    this.heartbeatInterval = window.setInterval(() => {
+      this.sendMetrics();
+      console.log('💓 Heartbeat - Live metrics sent');
+    }, this.HEARTBEAT_INTERVAL_MS);
+
+    console.log('💚 Live tracking heartbeat started');
+  }
+
+  // Stop live tracking
+  private stopLiveTracking() {
+    if (this.heartbeatInterval !== null) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+      console.log('🛑 Live tracking heartbeat stopped');
+    }
+  }
+
   // Stop tracking (cleanup)
   public destroy() {
+    this.stopLiveTracking();
     this.sendMetrics(); // Final send
   }
 }
